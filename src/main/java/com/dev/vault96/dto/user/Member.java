@@ -28,7 +28,7 @@ public class Member implements UserDetails {
     private String email;
 
     private String password;
-
+    @Indexed(unique = true)
     private String nickname;
     
     private PersonName personName;
@@ -45,6 +45,8 @@ public class Member implements UserDetails {
     private Date deleteAt = null;
 
     private boolean isValid;
+
+    private int loginCnt;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

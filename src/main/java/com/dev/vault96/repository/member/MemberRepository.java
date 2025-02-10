@@ -1,4 +1,4 @@
-package com.dev.vault96.repository;
+package com.dev.vault96.repository.member;
 
 import com.dev.vault96.dto.user.Member;
 import org.springframework.data.mongodb.repository.MongoRepository;

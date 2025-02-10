@@ -6,15 +6,14 @@ import com.dev.vault96.controller.message.LoginResponseBody;
 import com.dev.vault96.controller.message.MemberInfo;
 import com.dev.vault96.controller.message.MemberJoinForm;
 import com.dev.vault96.dto.user.Member;
-import com.dev.vault96.repository.MemberRepository;
+import com.dev.vault96.repository.member.MemberRepository;
 import com.dev.vault96.service.LoginService;
+import com.dev.vault96.service.member.MemberService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,8 +23,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
     private final JWTService jwtService;
     private final LoginService loginService;
-    private final MemberRepository memberRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final MemberService memberService;
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     @PostMapping("/login")
@@ -48,36 +46,15 @@ public class AuthController {
             return ResponseEntity.ok(loginResponseBody);
         } catch (Exception e) {
             logger.warn("Login failed: Invalid credentials");
+            Member member = memberService.findMemberByEmail(loginRequestBody.getEmail());
+            if(member.getLoginCnt() > 5){
+                member.setValid(false);
+            }
+            member.setLoginCnt(member.getLoginCnt()+1);
+            memberService.save(member);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
         }
     }
-
-    @PostMapping("/join")
-    public ResponseEntity<MemberInfo> joinMember(@RequestBody MemberJoinForm memberJoinForm) {
-        if (memberRepository.findMemberByEmail(memberJoinForm.getEmail()).isPresent()) {
-            logger.warn("Registration failed: Email already exists");
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
-        }
-
-        Member newMember = new Member();
-        newMember.setEmail(memberJoinForm.getEmail());
-        newMember.setPassword(passwordEncoder.encode(memberJoinForm.getPassword()));
-        newMember.setNickname(memberJoinForm.getNickname());
-        newMember.setPersonName(memberJoinForm.getPersonName());
-        newMember.setProfileDescription(memberJoinForm.getProfileDescription());
-        newMember.setProfileImageUrl(memberJoinForm.getProfileImageUrl());
-        newMember.setValid(true);
-
-        Member savedMember = memberRepository.save(newMember);
-        if (savedMember == null) {
-            logger.warn("Registration failed: Unable to save user");
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
-        }
-
-        logger.info("Registration successful: " + newMember.getEmail());
-        return ResponseEntity.ok(new MemberInfo(savedMember));
-    }
-
 
     @GetMapping("/token/refresh")
     public ResponseEntity<LoginResponseBody> refreshTokenHandler() {

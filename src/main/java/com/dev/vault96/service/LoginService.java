@@ -1,7 +1,7 @@
     package com.dev.vault96.service;
 
     import com.dev.vault96.dto.user.Member;
-    import com.dev.vault96.repository.MemberRepository;
+    import com.dev.vault96.service.member.MemberService;
     import lombok.RequiredArgsConstructor;
     import org.springframework.security.authentication.AuthenticationManager;
     import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -15,13 +15,15 @@
     @RequiredArgsConstructor
     public class LoginService implements UserDetailsService {
 
-        private final MemberRepository memberRepository;
+        private final MemberService memberService;
         private final AuthenticationConfiguration authenticationConfiguration; // ✅ AuthenticationManager를 직접 가져오기 위해 사용
 
         @Override
         public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-            return memberRepository.findMemberByEmail(email)
-                    .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+            Member member =  memberService.findMemberByEmail(email);
+            if(member == null) {throw new UsernameNotFoundException("No Such User");}
+            return member;
         }
 
         public Member authenticate(String email, String rawPassword) {
@@ -31,8 +33,9 @@
                         new UsernamePasswordAuthenticationToken(email, rawPassword)
                 );
 
-                return memberRepository.findMemberByEmail(email)
-                        .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+                Member member =  memberService.findMemberByEmail(email);
+                if(member == null) {throw new UsernameNotFoundException("No Such User");};
+                return member;
 
             } catch (Exception e) {
                 throw new RuntimeException("Authentication failed", e);

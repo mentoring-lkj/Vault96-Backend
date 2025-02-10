@@ -10,23 +10,23 @@ import software.amazon.awssdk.services.s3.S3Client;
 
 @Configuration
 public class S3Config {
+
+    @Value("${aws.s3.region}")
+    private String region;
+
     @Value("${spring.cloud.aws.credentials.access-key}")
-    private String accesskey;
+    private String accessKey;
 
     @Value("${spring.cloud.aws.credentials.secret-key}")
     private String secretKey;
 
     @Bean
     public S3Client s3Client() {
+        AwsBasicCredentials awsCreds = AwsBasicCredentials.create(accessKey, secretKey);
+
         return S3Client.builder()
-                .region(Region.AP_NORTHEAST_2) // 서울 리전
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(
-                                accesskey,
-                                secretKey//
-                        )
-                ))
+                .region(Region.of(region))
+                .credentialsProvider(StaticCredentialsProvider.create(awsCreds))
                 .build();
     }
-
 }
