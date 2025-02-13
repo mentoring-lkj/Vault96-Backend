@@ -1,4 +1,4 @@
-package com.dev.vault96.dto.user;
+package com.dev.vault96.entity.user;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;

@@ -2,8 +2,7 @@ package com.dev.vault96.controller;
 
 import com.dev.vault96.controller.message.MemberInfo;
 import com.dev.vault96.controller.message.MemberJoinForm;
-import com.dev.vault96.dto.user.Member;
-import com.dev.vault96.repository.member.MemberRepository;
+import com.dev.vault96.entity.user.Member;
 import com.dev.vault96.service.member.MemberService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

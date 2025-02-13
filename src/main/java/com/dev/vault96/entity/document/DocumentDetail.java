@@ -1,26 +1,28 @@
-package com.dev.vault96.dto.document;
+package com.dev.vault96.entity.document;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import java.time.LocalDateTime;
 
-@Document(collection = "tag")
+@Document(collection = "documentDetail")
 @Getter
 @Setter
 @AllArgsConstructor
-public class Tag {
+public class DocumentDetail {
     @Id
     private String id;
-    private String userId;
-
     @Indexed(unique = true)
-    private String tagId;
+    private String documentId;
     @Indexed(unique = true)
-    private String name;
+    private int version;
+    private LocalDateTime createdAt;
+    @Indexed(unique = true)
+    private String s3Url;
+    private long size;
 
-    public Tag() {}
+    public DocumentDetail() {}
 
 }
-

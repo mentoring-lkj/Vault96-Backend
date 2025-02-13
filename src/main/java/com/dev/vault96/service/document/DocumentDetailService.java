@@ -1,6 +1,6 @@
-package com.dev.vault96.service.member;
+package com.dev.vault96.service.document;
 
-import com.dev.vault96.dto.document.DocumentDetail;
+import com.dev.vault96.entity.document.DocumentDetail;
 import com.dev.vault96.repository.document.DocumentDetailRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,9 +20,8 @@ public class DocumentDetailService {
     }
 
     public List<DocumentDetail> findDocumentDetailsByDocumentId(String documentId){
-        Optional<List<DocumentDetail>> documentDetails = documentDetailRepository.findDocumentDetailsByDocumentId(documentId);
-        if(documentDetails.isPresent()) return documentDetails.get();
-        else return null;
+        List<DocumentDetail> documentDetails = documentDetailRepository.findDocumentDetailsByDocumentId(documentId);
+        return documentDetails;
     }
 
     public DocumentDetail findDocumentDetailByDocumentIdAndVersion(String documentId, String version){

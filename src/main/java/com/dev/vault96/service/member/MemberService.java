@@ -1,15 +1,11 @@
 package com.dev.vault96.service.member;
 
-import com.dev.vault96.controller.AuthController;
-import com.dev.vault96.controller.message.MemberInfo;
 import com.dev.vault96.controller.message.MemberJoinForm;
-import com.dev.vault96.dto.user.Member;
+import com.dev.vault96.entity.user.Member;
 import com.dev.vault96.repository.member.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -18,7 +14,6 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class MemberService {
-
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private static final Logger logger = LoggerFactory.getLogger(MemberService.class);

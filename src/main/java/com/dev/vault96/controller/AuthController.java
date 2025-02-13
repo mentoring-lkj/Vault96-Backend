@@ -4,17 +4,14 @@ import com.dev.vault96.config.security.jwt.JWTService;
 import com.dev.vault96.controller.message.LoginRequestBody;
 import com.dev.vault96.controller.message.LoginResponseBody;
 import com.dev.vault96.controller.message.MemberInfo;
-import com.dev.vault96.controller.message.MemberJoinForm;
-import com.dev.vault96.dto.user.Member;
-import com.dev.vault96.repository.member.MemberRepository;
-import com.dev.vault96.service.LoginService;
+import com.dev.vault96.entity.user.Member;
+import com.dev.vault96.service.AuthService;
 import com.dev.vault96.service.member.MemberService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -22,8 +19,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/auth")
 public class AuthController {
     private final JWTService jwtService;
-    private final LoginService loginService;
     private final MemberService memberService;
+    private final AuthService authService;
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     @PostMapping("/login")
@@ -31,7 +28,7 @@ public class AuthController {
         logger.info("Login attempt: " + loginRequestBody.getEmail());
 
         try {
-            Member member = loginService.authenticate(loginRequestBody.getEmail(), loginRequestBody.getPassword());
+            Member member = authService.authenticate(loginRequestBody.getEmail(), loginRequestBody.getPassword());
 
             String jwtAccessToken = jwtService.generateToken(member);
             String jwtRefreshToken = jwtService.generateRefreshToken(member);

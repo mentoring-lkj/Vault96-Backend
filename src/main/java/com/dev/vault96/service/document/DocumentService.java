@@ -1,6 +1,6 @@
-package com.dev.vault96.service.member;
+package com.dev.vault96.service.document;
 
-import com.dev.vault96.dto.document.Document;
+import com.dev.vault96.entity.document.Document;
 import com.dev.vault96.repository.document.DocumentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -25,15 +25,13 @@ public class DocumentService {
     }
 
     public List<Document> findDocumentsByOwner(String owner){
-        Optional<List<Document>> documents = documentRepository.findDocumentsByOwner(owner);
-        if(documents.isPresent()) return documents.get();
-        else return null;
+        List<Document> documents = documentRepository.findDocumentsByOwner(owner);
+        return documents;
     }
 
     public List<Document> findDocumentByOwnerAndNameLike(String owner, String name){
-        Optional<List<Document>> documents = documentRepository.findDocumentByOwnerAndNameLike(owner, name);
-        if(documents.isPresent()) return documents.get();
-        else return null;
+        List<Document> documents = documentRepository.findDocumentsByOwnerAndNameLike(owner, name);
+        return documents;
     }
 
     public void updateDocumentName(String documentId, String newName){
@@ -48,9 +46,23 @@ public class DocumentService {
         return mongoTemplate.updateFirst(query, update, Document.class).getModifiedCount() > 0;
     }
 
+    public List<Document> findDocumentsContainTag(String owner, String tagId){
+        List<Document> documents = documentRepository.findDocumentsByOwnerAndTagsContaining(owner, tagId);
+        return documents;
+    }
+
+    public List<Document> findDocumentsContatinTags(String owner, List<String> tagIds){
+        List<Document> documents = documentRepository.findDocumentsByOwnerAndTagsContainingAll(owner, tagIds);
+        return documents;
+    }
+
+    public List<Document> findDocumentsBySharedMember(String sharedMember){
+        List<Document> documents = documentRepository.findDocumentsBySharedMembersContaining(sharedMember);
+        return documents;
+    }
+
     public void save(Document document){
         documentRepository.save(document);
     }
-
 
 }

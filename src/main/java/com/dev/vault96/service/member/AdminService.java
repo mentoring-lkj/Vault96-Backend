@@ -1,6 +1,6 @@
 package com.dev.vault96.service.member;
 
-import com.dev.vault96.dto.document.Admin;
+import com.dev.vault96.entity.document.Admin;
 import com.dev.vault96.repository.document.AdminRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

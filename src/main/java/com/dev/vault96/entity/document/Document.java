@@ -1,4 +1,4 @@
-package com.dev.vault96.dto.document;
+package com.dev.vault96.entity.document;
 
 import lombok.Getter;
 import lombok.Setter;

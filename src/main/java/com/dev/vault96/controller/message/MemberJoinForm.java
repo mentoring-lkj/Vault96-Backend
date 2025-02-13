@@ -1,6 +1,6 @@
 package com.dev.vault96.controller.message;
 
-import com.dev.vault96.dto.user.PersonName;
+import com.dev.vault96.entity.user.PersonName;
 import lombok.Getter;
 import lombok.Setter;
 
