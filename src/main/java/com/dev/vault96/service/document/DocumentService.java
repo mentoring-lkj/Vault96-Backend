@@ -34,6 +34,14 @@ public class DocumentService {
         return documents;
     }
 
+    public Document findDocumentByOwnerAndName(String email, String name){
+        Optional<Document> document = documentRepository.findDocumentByOwnerAndName(email, name);
+        if(document.isPresent()){
+            return document.get();
+        }
+        else return null;
+    }
+
     public void updateDocumentName(String documentId, String newName){
         Document document = documentRepository.findDocumentById(documentId).get();
         document.setName(newName);
@@ -63,6 +71,17 @@ public class DocumentService {
 
     public void save(Document document){
         documentRepository.save(document);
+    }
+
+    public String getFileExtension(String fileName) {
+        if (fileName == null || fileName.lastIndexOf(".") == -1) {
+            return "";
+        }
+        return fileName.substring(fileName.lastIndexOf(".") + 1);
+    }
+
+    public void deleteDocument(Document document){
+        documentRepository.delete(document);
     }
 
 }

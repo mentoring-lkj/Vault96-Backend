@@ -29,4 +29,6 @@ public interface DocumentRepository extends MongoRepository<Document, String> {
 
     List<Document> findDocumentsBySharedMembersContaining(String email);
 
+    void deleteDocumentByOwnerAndName(String email, String name);
+
 }
