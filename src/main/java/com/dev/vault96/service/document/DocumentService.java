@@ -2,6 +2,7 @@ package com.dev.vault96.service.document;
 
 import com.dev.vault96.entity.document.Document;
 import com.dev.vault96.repository.document.DocumentRepository;
+import com.mongodb.DuplicateKeyException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -48,9 +49,9 @@ public class DocumentService {
         documentRepository.save(document);
     }
 
-    public boolean addTagToDocument(String documentId, String tagId) {
+    public boolean addTagToDocument(String documentId, String tagName) {
         Query query = new Query(Criteria.where("id").is(documentId));
-        Update update = new Update().addToSet("tags", tagId); // 중복 없이 추가
+        Update update = new Update().addToSet("tags", tagName); // 중복 없이 추가
         return mongoTemplate.updateFirst(query, update, Document.class).getModifiedCount() > 0;
     }
 
@@ -69,15 +70,13 @@ public class DocumentService {
         return documents;
     }
 
-    public void save(Document document){
-        documentRepository.save(document);
-    }
+    public void save(Document document) throws DuplicateKeyException{
 
-    public String getFileExtension(String fileName) {
-        if (fileName == null || fileName.lastIndexOf(".") == -1) {
-            return "";
+        try{
+            documentRepository.save(document);
+        }catch(DuplicateKeyException e){
+            throw e;
         }
-        return fileName.substring(fileName.lastIndexOf(".") + 1);
     }
 
     public void deleteDocument(Document document){

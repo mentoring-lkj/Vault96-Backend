@@ -1,14 +1,18 @@
 package com.dev.vault96.controller;
 
-import com.dev.vault96.controller.message.CreateDocumentRequestBody;
-import com.dev.vault96.controller.message.CreateDocumentResponseBody;
-import com.dev.vault96.controller.message.DownloadDocumentResponseBody;
+import com.dev.vault96.controller.message.document.CreateDocumentRequestBody;
+import com.dev.vault96.controller.message.document.CreateDocumentResponseBody;
+import com.dev.vault96.controller.message.document.DocumentSearchRequestBody;
+import com.dev.vault96.controller.message.document.DownloadDocumentResponseBody;
 import com.dev.vault96.entity.document.Document;
 import com.dev.vault96.service.AuthService;
 import com.dev.vault96.service.document.DocumentService;
 import com.dev.vault96.service.s3.S3Service;
+import com.dev.vault96.util.DocumentUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,12 +24,11 @@ import java.util.*;
 @RequiredArgsConstructor
 public class DocumentController {
     private final DocumentService documentService;
+    private final DocumentUtil documentUtil;
     private final AuthService authService;
     private final S3Service s3Service;
+    private static final Logger logger = LoggerFactory.getLogger(DocumentController.class);
 
-    /**
-     * ✅ 1. 사용자의 모든 문서 조회 (GET /api/documents)
-     */
     @GetMapping
     public ResponseEntity<List<Document>> getUserDocuments(HttpServletRequest request) {
         String email = authService.extractEmailFromToken(request);
@@ -35,35 +38,42 @@ public class DocumentController {
         return ResponseEntity.ok(documents);
     }
 
-    /**
-     * ✅ 2. 문서 이름으로 검색 (GET /api/documents/search?name=filename)
-     */
-    @GetMapping("/search")
-    public ResponseEntity<List<Document>> searchDocumentsByName(HttpServletRequest request,
-                                                                @RequestParam String name) {
+    @PostMapping("/search")
+    public ResponseEntity<List<Document>> searchDocuments(
+            HttpServletRequest request,
+            @RequestBody DocumentSearchRequestBody requestBody) {
         String email = authService.extractEmailFromToken(request);
         if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
-        List<Document> documents = documentService.findDocumentByOwnerAndNameLike(email, name);
-        return ResponseEntity.ok(documents);
+        boolean isNameEmpty = requestBody.getName() == null || requestBody.getName().trim().isEmpty();
+        boolean isTagsEmpty = requestBody.getTags() == null || requestBody.getTags().isEmpty();
+
+        //  검색 조건이 둘 다 비어 있으면 모든 문서 반환
+        if (isNameEmpty && isTagsEmpty) {
+            List<Document> allDocuments = documentService.findDocumentsByOwner(email);
+            logger.debug("Returning all documents: " + allDocuments.size());
+            return ResponseEntity.ok(allDocuments);
+        }
+
+        //  개별 조건으로 검색 수행
+        List<Document> documentsByName = isNameEmpty ? new ArrayList<>() : documentService.findDocumentByOwnerAndNameLike(email, requestBody.getName());
+        List<Document> documentsByTags = isTagsEmpty ? new ArrayList<>() : documentService.findDocumentsContatinTags(email, requestBody.getTags());
+
+        //  교집합 구하기
+        Set<Document> resultDocuments;
+        if (!isNameEmpty && !isTagsEmpty) {
+            resultDocuments = new HashSet<>(documentsByName);
+            resultDocuments.retainAll(documentsByTags); // 🔥 교집합 유지
+        } else {
+            resultDocuments = new HashSet<>();
+            resultDocuments.addAll(documentsByName);
+            resultDocuments.addAll(documentsByTags);
+        }
+
+        logger.debug("Final result size: " + resultDocuments.size());
+        return ResponseEntity.ok(new ArrayList<>(resultDocuments));
     }
 
-    /**
-     * ✅ 3. 특정 태그가 포함된 문서 검색 (GET /api/documents/search/tags?tagIds=tag1,tag2)
-     */
-    @GetMapping("/search/tags")
-    public ResponseEntity<List<Document>> searchDocumentsByTags(HttpServletRequest request,
-                                                                @RequestParam List<String> tagIds) {
-        String email = authService.extractEmailFromToken(request);
-        if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-
-        List<Document> documents = documentService.findDocumentsContatinTags(email, tagIds);
-        return ResponseEntity.ok(documents);
-    }
-
-    /**
-     * ✅ 4. 공유된 문서 조회 (GET /api/documents/shared)
-     */
     @GetMapping("/shared")
     public ResponseEntity<List<Document>> getSharedDocuments(HttpServletRequest request) {
         String email = authService.extractEmailFromToken(request);
@@ -73,9 +83,6 @@ public class DocumentController {
         return ResponseEntity.ok(documents);
     }
 
-    /**
-     * ✅ 5. 문서 이름 변경 (PUT /api/documents/updateName)
-     */
     @PutMapping("/updateName")
     public ResponseEntity<Void> updateDocumentName(HttpServletRequest request,
                                                    @RequestParam String name,
@@ -91,9 +98,6 @@ public class DocumentController {
         return ResponseEntity.ok().build();
     }
 
-    /**
-     * ✅ 6. 문서 삭제 (DELETE /api/documents/delete)
-     */
     @DeleteMapping("/delete")
     public ResponseEntity<Void> deleteDocument(HttpServletRequest request,
                                                @RequestParam String name) {
@@ -104,24 +108,19 @@ public class DocumentController {
         return ResponseEntity.ok(null);
     }
 
-    /**
-     * ✅ 7. 문서에 태그 추가 (POST /api/documents/addTag)
-     */
+
     @PostMapping("/addTag")
     public ResponseEntity<Void> addTagToDocument(HttpServletRequest request,
                                                  @RequestParam String name,
-                                                 @RequestParam String tagId) {
+                                                 @RequestParam String tagName) {
         String email = authService.extractEmailFromToken(request);
         if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
         Document document = documentService.findDocumentByOwnerAndName(email, name);
-        boolean updated = documentService.addTagToDocument(document.getId(), tagId);
+        boolean updated = documentService.addTagToDocument(document.getId(), tagName);
         return updated ? ResponseEntity.ok().build() : ResponseEntity.status(HttpStatus.NOT_MODIFIED).build();
     }
 
-    /**
-     * ✅ 8. Presigned URL 생성 (POST /api/documents/upload/request)
-     */
     @PostMapping("/upload/request")
     public ResponseEntity<CreateDocumentResponseBody> requestPresignedUrl(HttpServletRequest request,
                                                                           @RequestBody CreateDocumentRequestBody requestBody) {
@@ -138,9 +137,6 @@ public class DocumentController {
         return ResponseEntity.ok(responseBody);
     }
 
-    /**
-     * ✅ 9. 파일 업로드 완료 후 이동 처리 (POST /api/documents/upload/complete)
-     */
     @PostMapping("/upload/complete")
     public ResponseEntity<String> uploadAndMove(HttpServletRequest request, @RequestBody CreateDocumentRequestBody requestBody) {
         String email = authService.extractEmailFromToken(request);
@@ -149,7 +145,7 @@ public class DocumentController {
         Document document = new Document();
         document.setName(name);
         document.setOwner(email);
-        document.setFormat(documentService.getFileExtension(name));
+        document.setFormat(documentUtil.getFileExtension(name));
         document.setCreatedAt(new Date());
         document.setTags(requestBody.getTags());
         document.setSize(s3Service.getFileSize("vault96-bucket", email, name));

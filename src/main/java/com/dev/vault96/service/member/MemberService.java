@@ -1,8 +1,9 @@
 package com.dev.vault96.service.member;
 
-import com.dev.vault96.controller.message.MemberJoinForm;
+import com.dev.vault96.controller.message.member.MemberJoinForm;
 import com.dev.vault96.entity.user.Member;
 import com.dev.vault96.repository.member.MemberRepository;
+import com.mongodb.DuplicateKeyException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +51,9 @@ public class MemberService {
 
     }
 
-    public void save(Member member){
-        memberRepository.save(member);
+    public void save(Member member) throws DuplicateKeyException{
+
+        try{memberRepository.save(member);}
+        catch(DuplicateKeyException e){throw e;}
     }
 }

@@ -11,10 +11,9 @@ import java.util.Optional;
 @Repository
 public interface TagRepository extends MongoRepository<Tag, String> {
 
-    List<Tag> findTagsByUserId(String userId);
+    List<Tag> findTagsByOwner(String userId);
 
     @Query("{'owner' : ?0, 'name' : {$regex: ?1, $options: 'i'}}")
-    List<Tag> findTagsByUserIdAndNameLike(String userId, String name);
-    Optional<Tag> findTagByTagId(String tagId);
+    List<Tag> findTagsByOwnerAndNameLike(String userId, String name);
 
 }

@@ -1,4 +1,4 @@
-package com.dev.vault96.controller.message;
+package com.dev.vault96.controller.message.login;
 
 import lombok.Getter;
 import lombok.Setter;

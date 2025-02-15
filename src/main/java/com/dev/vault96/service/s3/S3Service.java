@@ -1,5 +1,7 @@
 package com.dev.vault96.service.s3;
 
+import com.dev.vault96.util.DocumentUtil;
+import com.dev.vault96.util.FileContentTypeUtil;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,7 +17,8 @@ import java.time.Duration;
 @Getter
 public class S3Service {
     private final S3Client s3Client;
-    private final S3Presigner s3Presigner; // ✅ Presigned URL 생성을 위한 Presigner 사용
+    private final S3Presigner s3Presigner;
+    private final DocumentUtil documentUtil;
 
     private static final String BUCKET_NAME = "vault96-bucket";
     private static final String TEMP_PREFIX = "/temp/document/";
@@ -40,11 +43,12 @@ public class S3Service {
 
     public URL getPresignedUploadUrl(String email, String fileName) {
         String key = TEMP_PREFIX + email + "/" + fileName;
-
+        String extension = documentUtil.getFileExtension(fileName);
+        String contentType = FileContentTypeUtil.getContentType(extension);
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(BUCKET_NAME)
                 .key(key)
-                .contentType("application/octet-stream")
+                .contentType(contentType)
                 .build();
 
         PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()

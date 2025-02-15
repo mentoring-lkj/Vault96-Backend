@@ -1,4 +1,4 @@
-package com.dev.vault96.controller.message;
+package com.dev.vault96.controller.message.member;
 
 import com.dev.vault96.entity.user.Member;
 import com.dev.vault96.entity.user.PersonName;

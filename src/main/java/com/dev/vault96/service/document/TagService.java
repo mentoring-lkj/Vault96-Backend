@@ -2,6 +2,7 @@ package com.dev.vault96.service.document;
 
 import com.dev.vault96.entity.document.Tag;
 import com.dev.vault96.repository.document.TagRepository;
+import com.mongodb.DuplicateKeyException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -14,17 +15,20 @@ import java.util.Optional;
 public class TagService {
     private final TagRepository tagRepository;
 
-    public List<Tag> findTagsByUserId(String userId){
-        return tagRepository.findTagsByUserId(userId);
+    public List<Tag> findTagsByOwner(String userId){
+        return tagRepository.findTagsByOwner(userId);
     }
 
-    public List<Tag> findTagsByUserIdAndNameLike(String userId, String name){
-        return tagRepository.findTagsByUserIdAndNameLike(userId, name);
+    public List<Tag> findTagsByOwnerAndNameLike(String userId, String name){
+        return tagRepository.findTagsByOwnerAndNameLike(userId, name);
     }
 
-    public Tag findTagByTagId(String tagId){
-        Optional<Tag> tag = tagRepository.findTagByTagId(tagId);
-        if(tag.isPresent()){return tag.get();}
-        else{return null;}
+    public void save(Tag tag) throws DuplicateKeyException{
+        try{
+            tagRepository.save(tag);
+        }
+        catch(DuplicateKeyException e) {
+            throw e;
+        }
     }
 }

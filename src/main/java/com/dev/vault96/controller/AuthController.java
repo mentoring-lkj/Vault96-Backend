@@ -1,9 +1,9 @@
 package com.dev.vault96.controller;
 
 import com.dev.vault96.config.security.jwt.JWTService;
-import com.dev.vault96.controller.message.LoginRequestBody;
-import com.dev.vault96.controller.message.LoginResponseBody;
-import com.dev.vault96.controller.message.MemberInfo;
+import com.dev.vault96.controller.message.login.LoginRequestBody;
+import com.dev.vault96.controller.message.login.LoginResponseBody;
+import com.dev.vault96.controller.message.member.MemberInfo;
 import com.dev.vault96.entity.user.Member;
 import com.dev.vault96.service.AuthService;
 import com.dev.vault96.service.member.MemberService;

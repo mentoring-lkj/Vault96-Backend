@@ -1,5 +1,6 @@
-package com.dev.vault96.controller.message;
+package com.dev.vault96.controller.message.login;
 
+import com.dev.vault96.controller.message.member.MemberInfo;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;

@@ -10,6 +10,7 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 
 @org.springframework.data.mongodb.core.mapping.Document(collection = "document")
 @Getter
@@ -37,5 +38,17 @@ public class Document {
     @Indexed(unique = true)
     private long size;
 
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        Document document = (Document) obj;
+        return Objects.equals(id, document.id); // ✅ id가 같으면 같은 문서로 간주
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
 
 }
