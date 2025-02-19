@@ -1,4 +1,4 @@
-package com.dev.vault96.controller.message.document;
+package com.dev.vault96.controller.message.tag;
 
 import com.dev.vault96.entity.document.Tag;
 import lombok.Getter;
@@ -6,7 +6,6 @@ import lombok.Getter;
 import java.util.List;
 
 @Getter
-public class DocumentSearchRequestBody {
-    String name;
+public class DeleteTagRequestBody {
     List<Tag> tags;
 }

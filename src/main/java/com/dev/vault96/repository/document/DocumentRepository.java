@@ -1,6 +1,7 @@
 package com.dev.vault96.repository.document;
 
 import com.dev.vault96.entity.document.Document;
+import com.dev.vault96.entity.document.Tag;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -22,12 +23,15 @@ public interface DocumentRepository extends MongoRepository<Document, String> {
     List<Document> findDocumentsByOwnerAndNameLike(String owner, String name);
 
     @Query("{'owner': ?0, 'tags': {$in: [?1]}}")
-    List<Document> findDocumentsByOwnerAndTagsContaining(String owner, String tag);
+    List<Document> findDocumentsByOwnerAndTagsContaining(String owner, Tag tag);
 
     @Query("{'owner': ?0, 'tags': {$all: ?1}}")
-    List<Document> findDocumentsByOwnerAndTagsContainingAll(String owner, List<String> tags);
+    List<Document> findDocumentsByOwnerAndTagsContainingAll(String owner, List<String> tagIds);
 
     List<Document> findDocumentsBySharedMembersContaining(String email);
+
+
+    //List<Document> findDocumentsByOwnerAndTagsContainsAndNameLike()
 
     void deleteDocumentByOwnerAndName(String email, String name);
 

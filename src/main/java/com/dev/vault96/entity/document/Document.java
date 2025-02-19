@@ -6,6 +6,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.DBRef;
 
 import java.time.LocalDateTime;
 import java.util.Date;
@@ -28,7 +29,8 @@ public class Document {
 
     private String owner;
 
-    private List<String> tags;
+    @DBRef(lazy = true)
+    private List<Tag> tags;
 
     private List<String> sharedMembers;
 

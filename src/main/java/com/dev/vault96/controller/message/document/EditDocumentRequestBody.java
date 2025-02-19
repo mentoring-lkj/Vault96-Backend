@@ -6,7 +6,9 @@ import lombok.Getter;
 import java.util.List;
 
 @Getter
-public class DocumentSearchRequestBody {
+public class EditDocumentRequestBody {
     String name;
+    String newName;
     List<Tag> tags;
 }
+

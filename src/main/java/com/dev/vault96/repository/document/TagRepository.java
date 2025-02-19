@@ -12,7 +12,7 @@ import java.util.Optional;
 public interface TagRepository extends MongoRepository<Tag, String> {
 
     List<Tag> findTagsByOwner(String userId);
-
+    Optional<Tag> findTagByOwnerAndName(String email, String name);
     @Query("{'owner' : ?0, 'name' : {$regex: ?1, $options: 'i'}}")
     List<Tag> findTagsByOwnerAndNameLike(String userId, String name);
 
