@@ -9,4 +9,6 @@ import java.util.List;
 public class DocumentSearchRequestBody {
     String name;
     List<Tag> tags;
+    int page;
+    int size;
 }

@@ -42,11 +42,13 @@ public class DocumentController {
     }
 
     @PostMapping("/search")
-    public ResponseEntity<List<Document>> searchDocuments(
+    public ResponseEntity<DocumentSearchResponseBody> searchDocuments(
             HttpServletRequest request,
             @RequestBody DocumentSearchRequestBody requestBody) {
         String email = authService.extractEmailFromToken(request);
         if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        DocumentSearchResponseBody responseBody = new DocumentSearchResponseBody();
 
         boolean isNameEmpty = requestBody.getName() == null || requestBody.getName().trim().isEmpty();
         boolean isTagsEmpty = requestBody.getTags() == null || requestBody.getTags().isEmpty();
@@ -54,7 +56,10 @@ public class DocumentController {
         if (isNameEmpty && isTagsEmpty) {
             List<Document> allDocuments = documentService.findDocumentsByOwner(email);
             logger.debug("Returning all documents: " + allDocuments.size());
-            return ResponseEntity.ok(allDocuments);
+            responseBody.setFiles(allDocuments);
+            responseBody.setTotalCount(allDocuments.size());
+            responseBody.setHasNext(false);
+            return ResponseEntity.ok(responseBody);
         }
 
         // 🔹 개별 검색 수행
@@ -75,9 +80,12 @@ public class DocumentController {
             resultDocuments.addAll(documentsByName);
             resultDocuments.addAll(documentsByTags);
         }
-
+        List<Document> documents =  new ArrayList<>(resultDocuments);
+        responseBody.setFiles(documents);
+        responseBody.setTotalCount(documents.size());
+        responseBody.setHasNext(false);
         logger.debug("Final result size: " + resultDocuments.size());
-        return ResponseEntity.ok(new ArrayList<>(resultDocuments));
+        return ResponseEntity.ok(responseBody);
     }
 
 
@@ -99,11 +107,7 @@ public class DocumentController {
         if(requestBody.getNewName()!= null && !requestBody.getNewName().equals("")){
             document.setName(requestBody.getNewName());
         }
-        if(!requestBody.getTags().isEmpty()){
-            document.setTags(requestBody.getTags());
-        }
-
-
+        document.setTags(requestBody.getTags());
         try{
             documentService.save(document);
         }
@@ -113,54 +117,21 @@ public class DocumentController {
 
         return ResponseEntity.ok(document);
     }
-    @PutMapping("/updateName")
-    public ResponseEntity<Void> updateDocumentName(HttpServletRequest request,
-                                                   @RequestParam String name,
-                                                   @RequestParam String newName) {
-        String email = authService.extractEmailFromToken(request);
-        Document document = documentService.findDocumentByOwnerAndName(email, name);
-        Document newNameDocument = documentService.findDocumentByOwnerAndName(email, newName);
-        if(newNameDocument != null) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body((null));
-        }
-        documentService.updateDocumentName(document.getId(), newName);
-        s3Service.moveFile(email, name, newName);
-        return ResponseEntity.ok().build();
-    }
 
-    @DeleteMapping("/delete")
-    public ResponseEntity<Void> deleteDocument(HttpServletRequest request,
+    @PostMapping("/delete")
+    public ResponseEntity<Boolean> deleteDocument(HttpServletRequest request,
                                                @RequestBody DeleteDocumentRequestBody requestBody) {
-        String email = authService.extractEmailFromToken(request);
-        if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        Document document = documentService.findDocumentByOwnerAndName(email, requestBody.getName());
-        documentService.deleteDocument(document);
-        return ResponseEntity.ok(null);
-    }
-    @PostMapping("/updateTags")
-    public ResponseEntity<Void> updateTagsToDocument(HttpServletRequest request,
-                                                     @RequestBody UpdateDocumentTagRequest requestBody) {
-        String email = authService.extractEmailFromToken(request);
-        if (email == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
-        // 문서 찾기
-        Document document = documentService.findDocumentByOwnerAndName(email, requestBody.getName());
-        if (document == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build(); // 문서가 없을 경우
-        }
-
-        // 새로운 태그 목록 덮어 씌우기
-        List<Tag> newTags = requestBody.getTags();
-        document.setTags(newTags);
-
         try {
-            documentService.save(document);  // 문서 저장
-            return ResponseEntity.ok().build(); // 성공적으로 업데이트됨
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            String email = authService.extractEmailFromToken(request);
+            if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            Document document = documentService.findDocumentByOwnerAndName(email, requestBody.getName());
+            documentService.deleteDocument(document);
+            s3Service.deleteFile(email, document.getId());
         }
+        catch(Exception e){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(false);
+        }
+        return ResponseEntity.ok(true);
     }
 
 
@@ -182,20 +153,30 @@ public class DocumentController {
 
     @PostMapping("/upload/complete")
     public ResponseEntity<String> uploadAndMove(HttpServletRequest request, @RequestBody CreateDocumentRequestBody requestBody) {
+        logger.debug("complete file : " + requestBody.getName());
         String email = authService.extractEmailFromToken(request);
-        String name = requestBody.getName();
-        s3Service.moveFileToDocuments(email, name);
+        String fileName = requestBody.getName();
+
+        // 파일이 존재하는지 확인
+        if (!s3Service.doesFileExist(email, fileName)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("File not uploaded");
+        }
+
         Document document = new Document();
-        document.setName(name);
+        document.setName(fileName);
         document.setOwner(email);
-        document.setFormat(documentUtil.getFileExtension(name));
+        document.setFormat(documentUtil.getFileExtension(fileName));
         document.setCreatedAt(new Date());
-        document.setTags(requestBody.getTags());
-        document.setSize(s3Service.getFileSize("vault96-bucket", email, name));
+        document.setTags(new ArrayList<>());
         document.setSharedMembers(new ArrayList<>());
+
         documentService.save(document);
-        return ResponseEntity.ok("File uploaded and moved successfully");
-    }
+
+        document.setSize(s3Service.getFileSize(email, document.getId()));
+        logger.debug("Document Key : " + document.getId());
+        s3Service.moveFileToDocuments(email, fileName, document.getId());
+
+        return ResponseEntity.ok("File uploaded and moved successfully");    }
 
     @PostMapping("/download")
     public ResponseEntity<DownloadDocumentResponseBody> download(HttpServletRequest request, @RequestBody DownloadDocumentRequestBody requestBody){
@@ -203,8 +184,9 @@ public class DocumentController {
         if (documentService.findDocumentByOwnerAndName(email, requestBody.getName()) == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         }
+        Document document = documentService.findDocumentByOwnerAndName(email, requestBody.getName());
 
-        String presignedDownloadUrl = s3Service.getPresignedDownloadUrl(email, requestBody.getName()).toString();
+        String presignedDownloadUrl = s3Service.getPresignedDownloadUrl(email,document.getName(), document.getId()).toString();
         DownloadDocumentResponseBody responseBody = new DownloadDocumentResponseBody();
         responseBody.setPresignedDownloadUrl(presignedDownloadUrl);
 

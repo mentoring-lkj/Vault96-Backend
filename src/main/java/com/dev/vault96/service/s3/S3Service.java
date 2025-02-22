@@ -24,12 +24,26 @@ public class S3Service {
     private static final String TEMP_PREFIX = "/temp/document/";
     private static final String DOCS_PREFIX = "/documents/";
 
-
-    public long getFileSize(String bucketName, String email, String name) {
-        String key = DOCS_PREFIX + email + "/"+name;
+    public boolean doesFileExist(String email, String name) {
+        String key = TEMP_PREFIX + email + "/" + name;
         try {
             HeadObjectRequest headRequest = HeadObjectRequest.builder()
-                    .bucket(bucketName)
+                    .bucket(BUCKET_NAME)
+                    .key(key)
+                    .build();
+            s3Client.headObject(headRequest);
+            return true;  // 파일 존재함
+        } catch (NoSuchKeyException e) {
+            return false; // 파일 없음
+        }
+    }
+
+
+    public long getFileSize( String email, String fileId) {
+        String key = DOCS_PREFIX + email + "/" + fileId;
+        try {
+            HeadObjectRequest headRequest = HeadObjectRequest.builder()
+                    .bucket(BUCKET_NAME)
                     .key(key)
                     .build();
 
@@ -60,9 +74,9 @@ public class S3Service {
     }
 
 
-    public void moveFileToDocuments(String email, String fileName) {
-        String tempKey = TEMP_PREFIX + email + "/" + fileName;
-        String finalKey = DOCS_PREFIX + email + "/" + fileName;
+    public void moveFileToDocuments(String email, String documentName, String documentId) {
+        String tempKey = TEMP_PREFIX + email + "/" + documentName;
+        String finalKey = DOCS_PREFIX + email + "/" + documentId;
 
         CopyObjectRequest copyRequest = CopyObjectRequest.builder()
                 .sourceBucket(BUCKET_NAME)
@@ -103,25 +117,34 @@ public class S3Service {
 
 
     }
+    public void deleteFile(String email, String fileId){
+        String fileKey = DOCS_PREFIX + email + "/" + fileId;
 
-    public URL getPresignedDownloadUrl(String email, String fileName) {
-        String key = DOCS_PREFIX + email + "/" + fileName; // ✅ 정식 저장 경로
+        try {
+
+            DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder().bucket(BUCKET_NAME).key(fileKey).build();
+            DeleteObjectResponse response = s3Client.deleteObject(deleteObjectRequest);
+        }
+        catch(Exception e){
+            throw e;
+        }
+    }
+    public URL getPresignedDownloadUrl(String email,String fileName, String fileId) {
+        String key = DOCS_PREFIX + email + "/" + fileId;
 
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(BUCKET_NAME)
                 .key(key)
+                .responseContentDisposition("attachment; filename=\"" + fileName + "\"")
                 .build();
 
         GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                .signatureDuration(Duration.ofMinutes(10)) // ✅ Presigned URL 유효시간 설정 (10분)
+                .signatureDuration(Duration.ofMinutes(1))
                 .getObjectRequest(getObjectRequest)
                 .build();
 
         return s3Presigner.presignGetObject(presignRequest).url();
     }
 
-    public void uploadAndMoveFile(String email, String fileName) {
-        moveFileToDocuments(email, fileName);
-    }
 
 }

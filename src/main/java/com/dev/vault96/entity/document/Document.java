@@ -37,7 +37,7 @@ public class Document {
     private String format;
 
     private Date createdAt;
-    @Indexed(unique = true)
+
     private long size;
 
     @Override

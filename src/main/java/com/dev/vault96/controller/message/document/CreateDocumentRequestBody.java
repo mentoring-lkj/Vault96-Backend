@@ -10,6 +10,6 @@ import java.util.List;
 public class CreateDocumentRequestBody {
 
     private String name;
-    private List<Tag> tags;
+//    private List<Tag> tags;
 
 }
