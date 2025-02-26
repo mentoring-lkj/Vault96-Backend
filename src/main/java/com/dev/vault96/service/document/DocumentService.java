@@ -5,6 +5,9 @@ import com.dev.vault96.entity.document.Tag;
 import com.dev.vault96.repository.document.DocumentRepository;
 import com.mongodb.DuplicateKeyException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -18,6 +21,21 @@ import java.util.*;
 public class DocumentService {
     private final DocumentRepository documentRepository;
     private final MongoTemplate mongoTemplate;
+
+
+    public Page<Document> findAllDocuments(String owner, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return documentRepository.findAllByOwner(owner, pageable);
+    }
+
+    public Page<Document> searchDocuments(String owner, String name, List<String> tagIds, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return documentRepository.searchDocuments(owner, name, tagIds, pageable);
+    }
+
+    public long countDocuments(String owner, String name, List<String> tagIds) {
+        return documentRepository.countDocuments(owner, name, tagIds);
+    }
 
     public Document findByOwnerAndName(String owner, String name){
         Optional<Document> document =  documentRepository.findDocumentByOwnerAndName(owner, name);

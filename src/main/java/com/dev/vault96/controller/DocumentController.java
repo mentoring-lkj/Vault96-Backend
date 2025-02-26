@@ -14,6 +14,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.parameters.P;
@@ -39,6 +40,39 @@ public class DocumentController {
 
         List<Document> documents = documentService.findDocumentsByOwner(email);
         return ResponseEntity.ok(documents);
+    }
+    @PostMapping("/search/page")
+    public ResponseEntity<DocumentSearchResponseBody> searchDocumentsPage(
+            HttpServletRequest request,
+            @RequestBody DocumentSearchRequestBody requestBody) {
+        String email = authService.extractEmailFromToken(request);
+        if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        String name = requestBody.getName() == null ? "" : requestBody.getName().trim();
+        List<String> tagIds = requestBody.getTags() == null ? new ArrayList<>() : requestBody.getTags().stream().map(Tag::getId).toList();
+
+        int page = requestBody.getPage();
+        int size = requestBody.getSize();
+
+        Page<Document> documentPage;
+        long totalCount = 0;
+
+        if (name.isEmpty() && tagIds.isEmpty()) {
+            documentPage = documentService.findAllDocuments(email, page, size);
+            totalCount = documentService.findDocumentsByOwner(email).size();
+        } else {
+            documentPage = documentService.searchDocuments(email, name, tagIds, page, size);
+            totalCount = documentService.countDocuments(email, name, tagIds);
+
+        }
+
+
+        DocumentSearchResponseBody responseBody = new DocumentSearchResponseBody();
+        responseBody.setFiles(documentPage.getContent()); // ✅ 현재 페이지 데이터
+        responseBody.setHasNext(documentPage.hasNext()); // ✅ 다음 페이지 존재 여부
+        responseBody.setTotalCount((int) totalCount); // ✅ 전체 문서 개수
+
+        return ResponseEntity.ok(responseBody);
     }
 
     @PostMapping("/search")

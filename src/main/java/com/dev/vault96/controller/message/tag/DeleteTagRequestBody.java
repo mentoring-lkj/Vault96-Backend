@@ -7,5 +7,5 @@ import java.util.List;
 
 @Getter
 public class DeleteTagRequestBody {
-    List<Tag> tags;
+    List<String> tagIds;
 }

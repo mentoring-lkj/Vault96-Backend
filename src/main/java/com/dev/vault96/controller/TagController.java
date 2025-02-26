@@ -81,11 +81,11 @@ public class TagController {
     public ResponseEntity<Void> deleteTag(HttpServletRequest request, @RequestBody DeleteTagRequestBody requestBody) {
         String email = authService.extractEmailFromToken(request);
         if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-
-        List<String> tagIds = requestBody.getTags().stream()
-                .map(Tag::getId)
-                .toList(); // 태그 ID 목록 추출
-        requestBody.getTags().forEach(tagService::delete);
+        logger.debug("delete user email : " + email);
+        logger.debug(requestBody.getTagIds().toString());
+        List<Tag> tags = tagService.findTagsByOwnerAndTagIds(email, requestBody.getTagIds());
+        logger.debug("tags length  : " + Integer.toString(tags.size()));
+        tags.forEach(tagService::delete);
 
         List<Document> documents = documentService.findDocumentsByOwner(email);
         documents.forEach(document -> {

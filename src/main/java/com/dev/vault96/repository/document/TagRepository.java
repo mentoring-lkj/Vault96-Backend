@@ -16,4 +16,10 @@ public interface TagRepository extends MongoRepository<Tag, String> {
     @Query("{'owner' : ?0, 'name' : {$regex: ?1, $options: 'i'}}")
     List<Tag> findTagsByOwnerAndNameLike(String userId, String name);
 
+    @Query("{ $and: [ { 'owner': ?0 }, { '_id': { $in: ?1 } } ] }")
+    List<Tag> findTagsByOwnerAndIds(String owner, List<String> tagIds);
+
+    Optional<Tag> findTagByOwnerAndId(String owner, String id);
+
+
 }

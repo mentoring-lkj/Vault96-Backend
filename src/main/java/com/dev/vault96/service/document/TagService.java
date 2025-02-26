@@ -37,6 +37,17 @@ public class TagService {
         return tagRepository.findTagsByOwnerAndNameLike(userId, name);
     }
 
+    public List<Tag> findTagsByOwnerAndTagIds(String owner, List<String> tagIds) {
+        List<Tag> tags = tagRepository.findTagsByOwnerAndIds(owner, tagIds);
+        return tags != null ? tags : new ArrayList<>();
+    }
+
+    public Tag findTagByOwnerAndTagId(String owner, String tagId){
+        Optional<Tag> tag = tagRepository.findTagByOwnerAndId(owner, tagId);
+        if(tag.isPresent()) return tag.get();
+        return null;
+    }
+
     public boolean updateTag(String owner, String tagId, String newName) {
         Optional<Tag> optionalTag = tagRepository.findById(tagId);
         if (optionalTag.isEmpty()) {
