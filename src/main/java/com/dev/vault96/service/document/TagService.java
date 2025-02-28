@@ -27,6 +27,11 @@ public class TagService {
         return tagRepository.findTagsByOwner(userId);
     }
 
+    public Tag findTagById(String id){
+        Optional<Tag> tag = tagRepository.findById(id);
+        if(tag.isPresent()) return tag.get();
+        return null;
+    }
     public Tag findTagByOwnerAndName(String email, String name){
         Optional<Tag> tag =  tagRepository.findTagByOwnerAndName(email, name);
         if(tag.isPresent()) return tag.get();

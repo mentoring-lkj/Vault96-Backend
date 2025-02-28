@@ -1,8 +1,6 @@
 package com.dev.vault96.controller;
 
 import com.dev.vault96.controller.message.document.*;
-import com.dev.vault96.controller.message.tag.AddTagRequest;
-import com.dev.vault96.controller.message.tag.UpdateTagRequest;
 import com.dev.vault96.entity.document.Document;
 import com.dev.vault96.entity.document.Tag;
 import com.dev.vault96.service.AuthService;
@@ -17,9 +15,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.parameters.P;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.util.*;
 
 @RestController
@@ -33,95 +32,46 @@ public class DocumentController {
     private final S3Service s3Service;
     private static final Logger logger = LoggerFactory.getLogger(DocumentController.class);
 
-    @GetMapping
-    public ResponseEntity<List<Document>> getUserDocuments(HttpServletRequest request) {
-        String email = authService.extractEmailFromToken(request);
-        if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-
-        List<Document> documents = documentService.findDocumentsByOwner(email);
-        return ResponseEntity.ok(documents);
-    }
-    @PostMapping("/search/page")
+    @PostMapping("/search")
     public ResponseEntity<DocumentSearchResponseBody> searchDocumentsPage(
             HttpServletRequest request,
             @RequestBody DocumentSearchRequestBody requestBody) {
+
         String email = authService.extractEmailFromToken(request);
         if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
-        String name = requestBody.getName() == null ? "" : requestBody.getName().trim();
-        List<String> tagIds = requestBody.getTags() == null ? new ArrayList<>() : requestBody.getTags().stream().map(Tag::getId).toList();
+        // Optional을 활용한 값 처리
+        String name = requestBody.getName().orElse("").trim();
+        List<String> tagIds = requestBody.getTagIds().orElse(Collections.emptyList());
+        String nameNFD = Normalizer.normalize(name, Normalizer.Form.NFD);
+
 
         int page = requestBody.getPage();
         int size = requestBody.getSize();
 
         Page<Document> documentPage;
-        long totalCount = 0;
+        long totalCount;
 
         if (name.isEmpty() && tagIds.isEmpty()) {
             documentPage = documentService.findAllDocuments(email, page, size);
-            totalCount = documentService.findDocumentsByOwner(email).size();
-        } else {
+            totalCount = documentService.countAllDocuments(email);
+        } else if (tagIds.isEmpty()) {
+            documentPage = documentService.findDocumentPageByOwnerAndNameLike(email, name, page, size);
+            totalCount = documentService.countDocumentsByOwnerAndName(email, name);
+        }
+        else {
             documentPage = documentService.searchDocuments(email, name, tagIds, page, size);
-            totalCount = documentService.countDocuments(email, name, tagIds);
-
+            totalCount = documentService.countDocumentsByOwnerAndNameAndTags(email, name, tagIds);
         }
 
 
         DocumentSearchResponseBody responseBody = new DocumentSearchResponseBody();
-        responseBody.setFiles(documentPage.getContent()); // ✅ 현재 페이지 데이터
-        responseBody.setHasNext(documentPage.hasNext()); // ✅ 다음 페이지 존재 여부
-        responseBody.setTotalCount((int) totalCount); // ✅ 전체 문서 개수
+        responseBody.setFiles(documentPage.getContent());
+        responseBody.setHasNext(documentPage.hasNext());
+        responseBody.setTotalCount((int) totalCount);
 
         return ResponseEntity.ok(responseBody);
     }
-
-    @PostMapping("/search")
-    public ResponseEntity<DocumentSearchResponseBody> searchDocuments(
-            HttpServletRequest request,
-            @RequestBody DocumentSearchRequestBody requestBody) {
-        String email = authService.extractEmailFromToken(request);
-        if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-
-        DocumentSearchResponseBody responseBody = new DocumentSearchResponseBody();
-
-        boolean isNameEmpty = requestBody.getName() == null || requestBody.getName().trim().isEmpty();
-        boolean isTagsEmpty = requestBody.getTags() == null || requestBody.getTags().isEmpty();
-
-        if (isNameEmpty && isTagsEmpty) {
-            List<Document> allDocuments = documentService.findDocumentsByOwner(email);
-            logger.debug("Returning all documents: " + allDocuments.size());
-            responseBody.setFiles(allDocuments);
-            responseBody.setTotalCount(allDocuments.size());
-            responseBody.setHasNext(false);
-            return ResponseEntity.ok(responseBody);
-        }
-
-        // 🔹 개별 검색 수행
-        List<Document> documentsByName = isNameEmpty
-                ? new ArrayList<>()
-                : documentService.findDocumentByOwnerAndNameLike(email, requestBody.getName());
-
-        List<Document> documentsByTags = isTagsEmpty
-                ? new ArrayList<>()
-                : documentService.findDocumentsContatinTags(email, requestBody.getTags());
-
-        Set<Document> resultDocuments;
-        if (!isNameEmpty && !isTagsEmpty) {
-            resultDocuments = new HashSet<>(documentsByName);
-            resultDocuments.retainAll(documentsByTags);
-        } else {
-            resultDocuments = new HashSet<>();
-            resultDocuments.addAll(documentsByName);
-            resultDocuments.addAll(documentsByTags);
-        }
-        List<Document> documents =  new ArrayList<>(resultDocuments);
-        responseBody.setFiles(documents);
-        responseBody.setTotalCount(documents.size());
-        responseBody.setHasNext(false);
-        logger.debug("Final result size: " + resultDocuments.size());
-        return ResponseEntity.ok(responseBody);
-    }
-
 
     @GetMapping("/shared")
     public ResponseEntity<List<Document>> getSharedDocuments(HttpServletRequest request) {
@@ -131,34 +81,54 @@ public class DocumentController {
         List<Document> documents = documentService.findDocumentsBySharedMember(email);
         return ResponseEntity.ok(documents);
     }
-    @PostMapping("/updateDocument")
-    public ResponseEntity<Document> updateDocument(HttpServletRequest request, @RequestBody EditDocumentRequestBody requestBody){
+    @PutMapping("/update/{id}")
+    public ResponseEntity<Document> updateDocument(
+            HttpServletRequest request,
+            @PathVariable String id,
+            @RequestBody UpdateDocumentRequestBody requestBody) {
+
         String email = authService.extractEmailFromToken(request);
         if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
-        Document document = documentService.findDocumentByOwnerAndName(email, requestBody.getName());
+        Document document = documentService.findDocumentById(id);
+        if (!document.getOwner().equals(email)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
 
-        if(requestBody.getNewName()!= null && !requestBody.getNewName().equals("")){
-            document.setName(requestBody.getNewName());
-        }
-        document.setTags(requestBody.getTags());
-        try{
+        // ✅ `Optional`을 활용하여 값이 존재할 때만 업데이트
+        requestBody.getName().ifPresent(name -> {
+            if (!name.trim().isEmpty()) {
+                document.setName(name);
+            }
+        });
+
+        // ✅ 태그 ID 리스트를 실제 `Tag` 객체 리스트로 변환하여 저장
+        List<String> tagIds = requestBody.getTagIds().orElse(Collections.emptyList());
+
+        List<Tag> tags = tagService.findTagsByOwnerAndTagIds(email, tagIds); // Tag ID로 실제 엔티티 조회
+        document.setTags(tags);
+
+        try {
             documentService.save(document);
-        }
-        catch(Exception e){
+        } catch (Exception e) {
+            logger.error("Error updating document: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).body(null);
         }
 
         return ResponseEntity.ok(document);
     }
-
-    @PostMapping("/delete")
+    @PostMapping("/delete/{id}")
     public ResponseEntity<Boolean> deleteDocument(HttpServletRequest request,
-                                               @RequestBody DeleteDocumentRequestBody requestBody) {
+                                               @PathVariable String id
+                                               ) {
         try {
             String email = authService.extractEmailFromToken(request);
             if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-            Document document = documentService.findDocumentByOwnerAndName(email, requestBody.getName());
+            Document document = documentService.findDocumentById(id);
+            if(!document.getOwner().equals(email)){
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(false);
+
+            }
             documentService.deleteDocument(document);
             s3Service.deleteFile(email, document.getId());
         }
@@ -196,8 +166,11 @@ public class DocumentController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("File not uploaded");
         }
 
+        String fileNameNFC = Normalizer.normalize(fileName, Normalizer.Form.NFC);
+
+
         Document document = new Document();
-        document.setName(fileName);
+        document.setName(fileNameNFC);
         document.setOwner(email);
         document.setFormat(documentUtil.getFileExtension(fileName));
         document.setCreatedAt(new Date());

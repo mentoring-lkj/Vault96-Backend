@@ -1,6 +1,5 @@
 package com.dev.vault96.controller;
 
-import com.dev.vault96.controller.message.document.DeleteDocumentRequestBody;
 import com.dev.vault96.controller.message.tag.AddTagRequest;
 import com.dev.vault96.controller.message.tag.DeleteTagRequestBody;
 import com.dev.vault96.controller.message.tag.UpdateTagRequest;
