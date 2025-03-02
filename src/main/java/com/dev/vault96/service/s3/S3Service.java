@@ -1,16 +1,29 @@
 package com.dev.vault96.service.s3;
 
 import com.dev.vault96.util.DocumentUtil;
+import com.dev.vault96.util.EncodingUtil;
 import com.dev.vault96.util.FileContentTypeUtil;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+import software.amazon.awssdk.core.ResponseBytes;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.*;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @Service
 @RequiredArgsConstructor
@@ -19,13 +32,14 @@ public class S3Service {
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
     private final DocumentUtil documentUtil;
+    private final EncodingUtil encodingUtil;
 
     private static final String BUCKET_NAME = "vault96-bucket";
     private static final String TEMP_PREFIX = "/temp/document/";
     private static final String DOCS_PREFIX = "/documents/";
+    private static final String SHARED_PREFIX = "/shared/";
 
-    public boolean doesFileExist(String email, String name) {
-        String key = TEMP_PREFIX + email + "/" + name;
+    public boolean doesFileExist(String key) {
         try {
             HeadObjectRequest headRequest = HeadObjectRequest.builder()
                     .bucket(BUCKET_NAME)
@@ -38,20 +52,18 @@ public class S3Service {
         }
     }
 
-
-    public long getFileSize( String email, String fileId) {
+    public long getFileSize(String email, String fileId) {
         String key = DOCS_PREFIX + email + "/" + fileId;
         try {
             HeadObjectRequest headRequest = HeadObjectRequest.builder()
                     .bucket(BUCKET_NAME)
                     .key(key)
                     .build();
-
             HeadObjectResponse headResponse = s3Client.headObject(headRequest);
-            return headResponse.contentLength(); // ✅ 파일 크기 반환 (bytes)
+            return headResponse.contentLength();
         } catch (NoSuchKeyException e) {
             System.out.println("파일이 존재하지 않음: " + key);
-            return -1; //
+            return -1;
         }
     }
 
@@ -59,6 +71,7 @@ public class S3Service {
         String key = TEMP_PREFIX + email + "/" + fileName;
         String extension = documentUtil.getFileExtension(fileName);
         String contentType = FileContentTypeUtil.getContentType(extension);
+
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(BUCKET_NAME)
                 .key(key)
@@ -73,31 +86,17 @@ public class S3Service {
         return s3Presigner.presignPutObject(presignRequest).url();
     }
 
+    public boolean moveFileToDocuments(String email, String documentName, String documentId) {
 
-    public void moveFileToDocuments(String email, String documentName, String documentId) {
-        String tempKey = TEMP_PREFIX + email + "/" + documentName;
-        String finalKey = DOCS_PREFIX + email + "/" + documentId;
+        String srcKey = TEMP_PREFIX + email + "/" + documentName;
 
-        CopyObjectRequest copyRequest = CopyObjectRequest.builder()
-                .sourceBucket(BUCKET_NAME)
-                .sourceKey(tempKey)
-                .destinationBucket(BUCKET_NAME)
-                .destinationKey(finalKey)
-                .build();
+        String destKey = DOCS_PREFIX + email + "/" + documentId;
 
-        s3Client.copyObject(copyRequest);
 
-        DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
-                .bucket(BUCKET_NAME)
-                .key(tempKey)
-                .build();
-
-        s3Client.deleteObject(deleteRequest);
-    }
-
-    public void moveFile(String email, String srcName, String destName){
-        String srcKey = TEMP_PREFIX + email + "/" + srcName;
-        String destKey = DOCS_PREFIX + email + "/" + destName;
+        // 파일이 존재하는지 확인
+        if (!doesFileExist(srcKey)) {
+            return false;
+        }
 
         CopyObjectRequest copyRequest = CopyObjectRequest.builder()
                 .sourceBucket(BUCKET_NAME)
@@ -108,43 +107,105 @@ public class S3Service {
 
         s3Client.copyObject(copyRequest);
 
-        DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
-                .bucket(BUCKET_NAME)
-                .key(srcKey)
-                .build();
+        deleteFileByKey(srcKey);
 
-        s3Client.deleteObject(deleteRequest);
-
-
+        return true;
     }
-    public void deleteFile(String email, String fileId){
+
+    public void deleteDocument(String email, String fileId) {
         String fileKey = DOCS_PREFIX + email + "/" + fileId;
+        deleteFileByKey(fileKey);
+    }
 
+    public void deleteSharedDocumentFolder(String email, String fileId) {
+        String fileKey = SHARED_PREFIX + email + "/" + fileId;
+        deleteFileByKey(fileKey);
+    }
+
+    private void deleteFileByKey(String key) {
         try {
-
-            DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder().bucket(BUCKET_NAME).key(fileKey).build();
-            DeleteObjectResponse response = s3Client.deleteObject(deleteObjectRequest);
-        }
-        catch(Exception e){
-            throw e;
+            DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
+                    .bucket(BUCKET_NAME)
+                    .key(key)
+                    .build();
+            s3Client.deleteObject(deleteObjectRequest);
+        } catch (Exception e) {
+            throw new RuntimeException("파일 삭제 실패: " + key, e);
         }
     }
-    public URL getPresignedDownloadUrl(String email,String fileName, String fileId) {
-        String key = DOCS_PREFIX + email + "/" + fileId;
 
+    public URL getDocumentPresignedDownloadUrl(String email, String fileName, String fileId) {
+        return generatePresignedDownloadUrl(DOCS_PREFIX + email + "/" + fileId, fileName);
+    }
+
+    public URL getSharedDocumentFolderPresignedDownloadUrl(String email, String fileName, String fileId) {
+        return generatePresignedDownloadUrl(SHARED_PREFIX + email + "/" + fileId, fileName+".zip");
+    }
+
+    public URL generatePresignedDownloadUrl(String key, String fileName) {
+        // 🔥 1️⃣ 먼저 S3에서 파일 존재 여부 확인
+        if (!doesFileExist(key)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "파일이 존재하지 않습니다: " + key);
+        }
+
+        // 🔥 2️⃣ 존재하면 Presigned URL 생성
+        String encodedFileName = EncodingUtil.encodeFileName(fileName) ;
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(BUCKET_NAME)
                 .key(key)
-                .responseContentDisposition("attachment; filename=\"" + fileName + "\"")
+                .responseContentDisposition("attachment; filename=\"" + encodedFileName + "\"")
                 .build();
 
         GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                .signatureDuration(Duration.ofMinutes(1))
+                .signatureDuration(Duration.ofMinutes(5))
                 .getObjectRequest(getObjectRequest)
                 .build();
 
         return s3Presigner.presignGetObject(presignRequest).url();
     }
 
+    public String uploadDocumentsAsZip(String owner, String folderId, List<byte[]> documentContents, List<String> fileNames) throws IOException {
+        // 1️⃣ ZIP 파일 생성
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        try (ZipOutputStream zipOutputStream = new ZipOutputStream(byteArrayOutputStream, StandardCharsets.UTF_8)) {
+            for (int i = 0; i < documentContents.size(); i++) {
+                ZipEntry zipEntry = new ZipEntry(fileNames.get(i));
+                zipOutputStream.putNextEntry(zipEntry);
+                zipOutputStream.write(documentContents.get(i));
+                zipOutputStream.closeEntry();
+            }
+        }
+
+        byte[] zipBytes = byteArrayOutputStream.toByteArray();
+        String s3Key = SHARED_PREFIX + owner + "/" + folderId ;
+
+        // 2️⃣ S3 업로드 (AWS SDK v2 방식)
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                .bucket(BUCKET_NAME)
+                .key(s3Key)
+                .contentType("application/zip")
+                .build();
+
+        s3Client.putObject(putObjectRequest, RequestBody.fromBytes(zipBytes));
+
+        // 3️⃣ 업로드된 파일의 S3 URL 반환
+        return s3Client.utilities().getUrl(GetUrlRequest.builder()
+                .bucket(BUCKET_NAME)
+                .key(s3Key)
+                .build()).toString();
+    }
+
+    public byte[] getDocumentContent(String owner, String documentId) {
+        String key = DOCS_PREFIX + owner + "/" + documentId;
+
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(BUCKET_NAME)
+                .key(key)
+                .build();
+
+        ResponseBytes<GetObjectResponse> objectBytes = s3Client.getObjectAsBytes(getObjectRequest);
+
+        return objectBytes.asByteArray();
+    }
 
 }

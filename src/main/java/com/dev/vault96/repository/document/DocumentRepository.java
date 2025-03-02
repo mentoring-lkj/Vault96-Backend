@@ -24,6 +24,8 @@ public interface DocumentRepository extends MongoRepository<Document, String> {
     @Query("{'owner': ?0, 'name': {$regex: ?1, $options: 'i'}}")
     Page<Document> findDocumentsByOwnerAndNameLike(String owner, String name, Pageable pageable);
 
+    List<Document> findAllByIdIn(List<String> ids);
+
     // 🔹 특정 사용자의 전체 문서 개수 조회
     long countByOwner(String email);
 

@@ -38,7 +38,7 @@ public class TagController {
         return ResponseEntity.ok(tags);
     }
 
-    @PostMapping("/add")
+    @PostMapping()
     public ResponseEntity<Void> addTag(HttpServletRequest request, @RequestBody AddTagRequest requestBody) {
         String email = authService.extractEmailFromToken(request);
         if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -63,15 +63,16 @@ public class TagController {
     }
 
 
-    @PostMapping("/updateTagNames")
+    @PutMapping("/{id}")
     public ResponseEntity<Void> updateTag(
             HttpServletRequest request,
+            @PathVariable String id,
             @RequestBody UpdateTagRequest requestBody) {
 
         String email = authService.extractEmailFromToken(request);
         if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
-        boolean isUpdated = tagService.updateTag(email, requestBody.getTagId(), requestBody.getNewName());
+        boolean isUpdated = tagService.updateTag(email, id, requestBody.getName());
         return isUpdated ? ResponseEntity.ok().build() : ResponseEntity.status(HttpStatus.NOT_MODIFIED).build();
     }
 

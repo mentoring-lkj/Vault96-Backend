@@ -4,6 +4,5 @@ import lombok.Getter;
 
 @Getter
 public class UpdateTagRequest {
-    private String tagId;
-    private String newName;
+    private String name;
 }

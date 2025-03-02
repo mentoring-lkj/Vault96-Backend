@@ -17,7 +17,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
 import java.util.*;
 
@@ -81,7 +80,7 @@ public class DocumentController {
         List<Document> documents = documentService.findDocumentsBySharedMember(email);
         return ResponseEntity.ok(documents);
     }
-    @PutMapping("/update/{id}")
+    @PutMapping("/{id}")
     public ResponseEntity<Document> updateDocument(
             HttpServletRequest request,
             @PathVariable String id,
@@ -117,7 +116,7 @@ public class DocumentController {
 
         return ResponseEntity.ok(document);
     }
-    @PostMapping("/delete/{id}")
+    @DeleteMapping("/{id}")
     public ResponseEntity<Boolean> deleteDocument(HttpServletRequest request,
                                                @PathVariable String id
                                                ) {
@@ -130,7 +129,7 @@ public class DocumentController {
 
             }
             documentService.deleteDocument(document);
-            s3Service.deleteFile(email, document.getId());
+            s3Service.deleteDocument(email, document.getId());
         }
         catch(Exception e){
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(false);
@@ -161,11 +160,6 @@ public class DocumentController {
         String email = authService.extractEmailFromToken(request);
         String fileName = requestBody.getName();
 
-        // 파일이 존재하는지 확인
-        if (!s3Service.doesFileExist(email, fileName)) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("File not uploaded");
-        }
-
         String fileNameNFC = Normalizer.normalize(fileName, Normalizer.Form.NFC);
 
 
@@ -193,7 +187,7 @@ public class DocumentController {
         }
         Document document = documentService.findDocumentByOwnerAndName(email, requestBody.getName());
 
-        String presignedDownloadUrl = s3Service.getPresignedDownloadUrl(email,document.getName(), document.getId()).toString();
+        String presignedDownloadUrl = s3Service.getDocumentPresignedDownloadUrl(email, document.getName(), document.getId()).toString();
         DownloadDocumentResponseBody responseBody = new DownloadDocumentResponseBody();
         responseBody.setPresignedDownloadUrl(presignedDownloadUrl);
 
