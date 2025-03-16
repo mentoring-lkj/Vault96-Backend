@@ -89,16 +89,9 @@ public class TagController {
 
         List<Document> documents = documentService.findDocumentsByOwner(email);
         documents.forEach(document -> {
-            // 각 문서에서 tags 배열에 있는 null 값 제거
             document.getTags().removeIf(Objects::isNull);
-
-            // 문서 업데이트 (저장)
             documentService.save(document);
         });
-        // 삭제된 태그들 처리
-
-        // 태그 삭제 후, 문서에서 null을 제거하고 빈 배열로 설정
-
         return ResponseEntity.ok().build();
     }
 

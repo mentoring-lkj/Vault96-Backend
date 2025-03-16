@@ -2,9 +2,21 @@ package com.dev.vault96.service.document;
 
 import com.dev.vault96.entity.document.Document;
 import com.dev.vault96.entity.document.Tag;
+import com.dev.vault96.entity.shared.SharedDocumentFolder;
+import com.dev.vault96.eventHandler.document.event.DocumentDeletedEvent;
+import com.dev.vault96.eventHandler.document.event.DocumentUploadEvent;
+import com.dev.vault96.eventHandler.shared.event.SharedFolderListUpdateEvent;
 import com.dev.vault96.repository.document.DocumentRepository;
+import com.dev.vault96.service.s3.S3Service;
+import com.dev.vault96.service.shared.SharedDocumentFolderService;
+import com.dev.vault96.util.DocumentUtil;
 import com.mongodb.DuplicateKeyException;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.ApplicationEventMulticaster;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -14,18 +26,31 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
+import java.text.Normalizer;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@EnableTransactionManagement
 public class DocumentService {
     private final DocumentRepository documentRepository;
     private final MongoTemplate mongoTemplate;
-
-    // ✅ 문서 ID로 조회
+    private final SharedDocumentFolderService sharedDocumentFolderService;
+    private final DocumentUtil documentUtil;
+    private final S3Service s3Service;
+    private final ApplicationEventPublisher applicationEventPublisher;
+    private final ApplicationContext applicationContext;
+    private final Logger logger = LoggerFactory.getLogger(DocumentService.class);
     public Document findDocumentById(String id) {
         return documentRepository.findDocumentById(id).orElse(null);
     }
@@ -136,11 +161,40 @@ public class DocumentService {
         documentRepository.delete(document);
     }
 
+
+    @Transactional
+    public boolean deleteDocument(String email, String documentId) {
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new IllegalArgumentException("문서를 찾을 수 없습니다: " + documentId));
+        List<SharedDocumentFolder> folders = null;
+
+        if (!document.getOwner().equals(email)) {
+            throw new SecurityException("해당 문서의 소유자가 아닙니다: " + documentId);
+        }
+        try{
+            folders = sharedDocumentFolderService.findByOwnerAndDocumentsContaining(email, document);
+
+            for (SharedDocumentFolder folder : folders) {
+                folder.getDocuments().remove(document);
+                sharedDocumentFolderService.save(folder);
+            }
+
+            documentRepository.delete(document);
+            applicationEventPublisher.publishEvent(new DocumentDeletedEvent(document.getOwner(), document.getId()));
+            applicationEventPublisher.publishEvent(new SharedFolderListUpdateEvent(document.getOwner(), folders));
+            return true;
+
+        }catch(ResponseStatusException e){
+            e.printStackTrace();
+            return false;
+        }
+
+    }
+
+
     public List<Document> getDocumentsByIdsAndOwner(List<String> ids, String owner) {
-        // 1 ID 리스트를 기반으로 문서 조회
         List<Document> foundDocuments = documentRepository.findAllByIdIn(ids);
 
-        // 2 조회된 Document의 ID 및 Owner 정보 추출
         Set<String> foundIds = foundDocuments.stream()
                 .map(Document::getId)
                 .collect(Collectors.toSet());
@@ -149,12 +203,10 @@ public class DocumentService {
                 .map(Document::getOwner)
                 .collect(Collectors.toSet());
 
-        // 3 요청한 ID 리스트 중 존재하지 않는 ID 찾기
         List<String> missingIds = ids.stream()
                 .filter(id -> !foundIds.contains(id))
                 .collect(Collectors.toList());
 
-        // 4 요청한 Owner와 일치하지 않는 Document 찾기
         List<String> invalidOwners = foundDocuments.stream()
                 .filter(doc -> !doc.getOwner().equals(owner))
                 .map(Document::getId)
@@ -165,13 +217,30 @@ public class DocumentService {
                     "존재하지 않는 Document ID: " + missingIds);
         }
 
-        // 6️⃣ Owner 불일치 문서가 있다면 요청 거부 (403 Forbidden)
         if (!invalidOwners.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "해당 Document의 소유자가 아닙니다: " + invalidOwners);
         }
 
         return foundDocuments;
+    }
+
+    @Transactional
+    public void createDocument(String email, String fileName, String fileNameNFC) {
+        Document document = new Document();
+        document.setName(fileNameNFC);
+        document.setOwner(email);
+        document.setFormat(documentUtil.getFileExtension(fileNameNFC));
+        document.setCreatedAt(new Date());
+        document.setTags(new ArrayList<>());
+        document.setSharedMembers(new ArrayList<>());
+        try{
+            Document savedDocument = documentRepository.save(document);
+            applicationEventPublisher.publishEvent(new DocumentUploadEvent(email, fileName, savedDocument.getId()));
+        }catch(DuplicateKeyException e){
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+
+        }
     }
 
 
