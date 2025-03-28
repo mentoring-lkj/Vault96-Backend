@@ -14,7 +14,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/member")
+@RequestMapping("/api/member")
 @RequiredArgsConstructor
 public class MemberController {
     private final MemberService memberService;
@@ -22,7 +22,6 @@ public class MemberController {
 
     @GetMapping("/whoami")
     public ResponseEntity<MemberInfo> getWhoAmI() {
-        logger.debug("whoami requested");
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -30,7 +29,6 @@ public class MemberController {
         }
 
         String email = authentication.getName();
-        logger.debug("user : " + email);
         Member member = memberService.findMemberByEmail(email);
         return ResponseEntity.ok(new MemberInfo(member));
     }
@@ -40,4 +38,5 @@ public class MemberController {
         if (isSuccess==null) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         else {return ResponseEntity.ok(new MemberInfo(isSuccess));}
     }
+    
 }

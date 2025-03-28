@@ -3,11 +3,14 @@ package com.dev.vault96.controller;
 import com.dev.vault96.controller.message.document.*;
 import com.dev.vault96.entity.document.Document;
 import com.dev.vault96.entity.document.Tag;
+import com.dev.vault96.entity.shared.SharedDocumentFolder;
 import com.dev.vault96.service.AuthService;
 import com.dev.vault96.service.document.DocumentService;
 import com.dev.vault96.service.document.TagService;
 import com.dev.vault96.service.s3.S3Service;
+import com.dev.vault96.service.shared.SharedDocumentFolderService;
 import com.dev.vault96.util.DocumentUtil;
+import com.mongodb.DuplicateKeyException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -15,21 +18,48 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
 import java.text.Normalizer;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/documents")
 @RequiredArgsConstructor
 public class DocumentController {
     private final DocumentService documentService;
+    private final SharedDocumentFolderService sharedDocumentFolderService;
     private final TagService tagService;
     private final DocumentUtil documentUtil;
     private final AuthService authService;
     private final S3Service s3Service;
     private static final Logger logger = LoggerFactory.getLogger(DocumentController.class);
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Document> getDocument(HttpServletRequest request, @PathVariable String id){
+        String email = authService.extractEmailFromToken(request);
+        Document document = documentService.findDocumentById(id);
+        if(!document.getOwner().equals(email)){
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(document);
+    }
+
+    @GetMapping("/multiple")
+    public ResponseEntity<List<Document>> getDocumentsByIds(HttpServletRequest request, @RequestBody List<String> ids){
+        String email = authService.extractEmailFromToken(request);
+        if(email == null) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        List<Document> documents = documentService.findAllByIdIn(ids);
+        boolean isValid = documents.stream().allMatch(document -> document.getOwner().equals(email)) && documents.size() == ids.size();
+        if(!isValid){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+        return ResponseEntity.ok(documents);
+    }
 
     @PostMapping("/search")
     public ResponseEntity<DocumentSearchResponseBody> searchDocumentsPage(
@@ -39,7 +69,6 @@ public class DocumentController {
         String email = authService.extractEmailFromToken(request);
         if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
-        // Optional을 활용한 값 처리
         String name = requestBody.getName().orElse("").trim();
         List<String> tagIds = requestBody.getTagIds().orElse(Collections.emptyList());
         String nameNFD = Normalizer.normalize(name, Normalizer.Form.NFD);
@@ -72,14 +101,6 @@ public class DocumentController {
         return ResponseEntity.ok(responseBody);
     }
 
-    @GetMapping("/shared")
-    public ResponseEntity<List<Document>> getSharedDocuments(HttpServletRequest request) {
-        String email = authService.extractEmailFromToken(request);
-        if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-
-        List<Document> documents = documentService.findDocumentsBySharedMember(email);
-        return ResponseEntity.ok(documents);
-    }
     @PutMapping("/{id}")
     public ResponseEntity<Document> updateDocument(
             HttpServletRequest request,
@@ -94,14 +115,12 @@ public class DocumentController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
-        // ✅ `Optional`을 활용하여 값이 존재할 때만 업데이트
         requestBody.getName().ifPresent(name -> {
             if (!name.trim().isEmpty()) {
                 document.setName(name);
             }
         });
 
-        // ✅ 태그 ID 리스트를 실제 `Tag` 객체 리스트로 변환하여 저장
         List<String> tagIds = requestBody.getTagIds().orElse(Collections.emptyList());
 
         List<Tag> tags = tagService.findTagsByOwnerAndTagIds(email, tagIds); // Tag ID로 실제 엔티티 조회
@@ -117,27 +136,23 @@ public class DocumentController {
         return ResponseEntity.ok(document);
     }
     @DeleteMapping("/{id}")
-    public ResponseEntity<Boolean> deleteDocument(HttpServletRequest request,
-                                               @PathVariable String id
-                                               ) {
+    public ResponseEntity<Boolean> deleteDocument(HttpServletRequest request, @PathVariable String id) {
         try {
             String email = authService.extractEmailFromToken(request);
-            if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-            Document document = documentService.findDocumentById(id);
-            if(!document.getOwner().equals(email)){
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(false);
-
+            if (email == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
             }
-            documentService.deleteDocument(document);
-            s3Service.deleteDocument(email, document.getId());
-        }
-        catch(Exception e){
+
+            boolean isDeleted = documentService.deleteDocument(email, id);
+            return ResponseEntity.ok(isDeleted);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(false);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(false);
+        }  catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(false);
         }
-        return ResponseEntity.ok(true);
     }
-
-
     @PostMapping("/upload/request")
     public ResponseEntity<CreateDocumentResponseBody> requestPresignedUrl(HttpServletRequest request,
                                                                           @RequestBody CreateDocumentRequestBody requestBody) {
@@ -156,36 +171,35 @@ public class DocumentController {
 
     @PostMapping("/upload/complete")
     public ResponseEntity<String> uploadAndMove(HttpServletRequest request, @RequestBody CreateDocumentRequestBody requestBody) {
-        logger.debug("complete file : " + requestBody.getName());
         String email = authService.extractEmailFromToken(request);
         String fileName = requestBody.getName();
-
         String fileNameNFC = Normalizer.normalize(fileName, Normalizer.Form.NFC);
 
 
-        Document document = new Document();
-        document.setName(fileNameNFC);
-        document.setOwner(email);
-        document.setFormat(documentUtil.getFileExtension(fileName));
-        document.setCreatedAt(new Date());
-        document.setTags(new ArrayList<>());
-        document.setSharedMembers(new ArrayList<>());
+        try {
+            documentService.createDocument(email, fileName, fileNameNFC);
+            return ResponseEntity.ok("File uploaded and moved successfully");
 
-        documentService.save(document);
+        }catch(DuplicateKeyException e){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Unavaiable file name: " );
 
-        document.setSize(s3Service.getFileSize(email, document.getId()));
-        logger.debug("Document Key : " + document.getId());
-        s3Service.moveFileToDocuments(email, fileName, document.getId());
+        }
+        catch (Exception e) {
+            logger.error("File move failed: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("File move failed: " + e.getMessage());
+        }
+    }
 
-        return ResponseEntity.ok("File uploaded and moved successfully");    }
-
-    @PostMapping("/download")
-    public ResponseEntity<DownloadDocumentResponseBody> download(HttpServletRequest request, @RequestBody DownloadDocumentRequestBody requestBody){
+    @PostMapping("/{id}/download")
+    public ResponseEntity<DownloadDocumentResponseBody> download(HttpServletRequest request, @PathVariable String id){
         String email = authService.extractEmailFromToken(request);
-        if (documentService.findDocumentByOwnerAndName(email, requestBody.getName()) == null) {
+        if(email == null){
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        Document document = documentService.findDocumentById(id);
+        if (document == null || !document.getOwner().equals(email)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         }
-        Document document = documentService.findDocumentByOwnerAndName(email, requestBody.getName());
 
         String presignedDownloadUrl = s3Service.getDocumentPresignedDownloadUrl(email, document.getName(), document.getId()).toString();
         DownloadDocumentResponseBody responseBody = new DownloadDocumentResponseBody();
