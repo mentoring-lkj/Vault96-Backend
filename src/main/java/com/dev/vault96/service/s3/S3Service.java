@@ -54,7 +54,23 @@ public class S3Service {
         }
     }
 
-    public long getFileSize(String email, String fileId) {
+    public long getTempFileSize(String email, String fileId){
+        String key = TEMP_PREFIX + email + "/" + fileId;
+        try {
+            HeadObjectRequest headRequest = HeadObjectRequest.builder()
+                    .bucket(BUCKET_NAME)
+                    .key(key)
+                    .build();
+            HeadObjectResponse headResponse = s3Client.headObject(headRequest);
+            return headResponse.contentLength();
+        } catch (NoSuchKeyException e) {
+            System.out.println("파일이 존재하지 않음: " + key);
+            return -1;
+        }
+
+    }
+
+    public long getDocsFileSize(String email, String fileId) {
         String key = DOCS_PREFIX + email + "/" + fileId;
         try {
             HeadObjectRequest headRequest = HeadObjectRequest.builder()

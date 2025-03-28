@@ -234,6 +234,7 @@ public class DocumentService {
         document.setCreatedAt(new Date());
         document.setTags(new ArrayList<>());
         document.setSharedMembers(new ArrayList<>());
+        document.setSize(s3Service.getTempFileSize(email, fileName));
         try{
             Document savedDocument = documentRepository.save(document);
             applicationEventPublisher.publishEvent(new DocumentUploadEvent(email, fileName, savedDocument.getId()));

@@ -38,4 +38,5 @@ public class MemberController {
         if (isSuccess==null) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         else {return ResponseEntity.ok(new MemberInfo(isSuccess));}
     }
+    
 }

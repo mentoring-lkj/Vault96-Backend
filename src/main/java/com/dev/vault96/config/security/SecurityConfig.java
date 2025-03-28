@@ -57,7 +57,7 @@ public class SecurityConfig {
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/login", "/auth/join", "auth/login/oauth", "api/member/join", "/api/shared/publicShared/**", "/api/shared/{id}/download").permitAll()
+                        .requestMatchers("/auth/login", "/auth/join", "/auth/login/oauth", "/api/member/join", "/api/shared/publicShared/**", "/api/shared/*/download").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**","/v3/api-docs", "/swagger-resources/**", "/swagger-ui.html", "/webjars/**", "/swagger/**", "/swagger-ui/index.html").permitAll()
                         .anyRequest().authenticated()
@@ -65,7 +65,7 @@ public class SecurityConfig {
                 .oauth2Login(oauth2 -> oauth2
                         .successHandler((request, response, authentication) -> {
                             request.getSession().setAttribute("oauthUser", authentication.getPrincipal());
-                            response.sendRedirect("http://localhost:5173/login/oauth");
+                            response.sendRedirect("https://vault96.me/login/oauth");
                         })
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -77,7 +77,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:5173/login/oauth"));
+        configuration.setAllowedOrigins(List.of("https://vault96.me", "https://vault96.me/login/oauth"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

@@ -33,7 +33,6 @@ public class SharedController {
         String email = authService.extractEmailFromToken(request);
         List<SharedDocumentFolder> sharedFolders = sharedDocumentFolderService.findSharedDocumentFoldersByOwner(email);
         GetSharedDocumentFoldersResponse response = new GetSharedDocumentFoldersResponse();
-        response.setSharedDocumentFolders(sharedFolders);
         return ResponseEntity.ok(response);
     }
 
