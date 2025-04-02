@@ -1,6 +1,9 @@
 package com.dev.vault96.service;
 
 
+import com.dev.vault96.config.security.jwt.JWTService;
+import com.dev.vault96.controller.message.login.LoginResponseBody;
+import com.dev.vault96.controller.message.member.MemberInfo;
 import com.dev.vault96.entity.user.Member;
 import com.dev.vault96.repository.member.MemberRepository;
 import com.dev.vault96.util.JWTUtils;
@@ -20,8 +23,24 @@ public class AuthService {
 
     private final AuthenticationProvider authenticationProvider;
     private final MemberRepository memberRepository;
+    private final JWTService jwtService;
     private final JWTUtils jwtUtils;
 
+
+
+    public LoginResponseBody generateLoginResponse(Member member){
+        String jwtAccessToken = jwtService.generateToken(member);
+        String jwtRefreshToken = jwtService.generateRefreshToken(member);
+
+        LoginResponseBody loginResponseBody = new LoginResponseBody();
+        loginResponseBody.setAccessToken(jwtAccessToken);
+        loginResponseBody.setRefreshToken(jwtRefreshToken);
+        loginResponseBody.setAccessTokenExpiresIn(JWTService.jwtExpiration);
+        loginResponseBody.setRefreshTokenExpiresIn(JWTService.jwtRefreshExpiration);
+        loginResponseBody.setMemberInfo(new MemberInfo(member));
+
+        return loginResponseBody;
+    }
 
     public String extractEmailFromToken(HttpServletRequest request){
         String email = jwtUtils.extractEmailFromRequest(request);

@@ -29,7 +29,6 @@ import java.util.Map;
 @RequiredArgsConstructor
 @RequestMapping("/auth")
 public class AuthController {
-    private final JWTService jwtService;
     private final MemberService memberService;
     private final AuthService authService;
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
@@ -41,16 +40,7 @@ public class AuthController {
 
         try {
             Member member = authService.authenticate(loginRequestBody.getEmail(), loginRequestBody.getPassword());
-
-            String jwtAccessToken = jwtService.generateToken(member);
-            String jwtRefreshToken = jwtService.generateRefreshToken(member);
-
-            LoginResponseBody loginResponseBody = new LoginResponseBody();
-            loginResponseBody.setAccessToken(jwtAccessToken);
-            loginResponseBody.setRefreshToken(jwtRefreshToken);
-            loginResponseBody.setAccessTokenExpiresIn(3600000);
-            loginResponseBody.setRefreshTokenExpiresIn(604800000);
-            loginResponseBody.setMemberInfo(new MemberInfo(member));
+            LoginResponseBody loginResponseBody = authService.generateLoginResponse(member);
 
             return ResponseEntity.ok(loginResponseBody);
         } catch (Exception e) {
@@ -90,26 +80,10 @@ public class AuthController {
 
         Member member = memberService.findMemberByEmail(email);
         if (member == null) {
-            member = new Member();
-            member.setEmail(email);
-            member.setPersonName(new PersonName((String) attributes.get("given_name"), "", (String) attributes.get("family_name")));
-            member.setProfileImageUrl((String) attributes.get("picture"));
-            member.setCreateAt(new Date());
-            member.setValid(true);
-            member.setNickname((String)attributes.get("name"));
-            member.setProfileDescription("");
-            memberService.save(member);
+            member = memberService.createMemberFromOAuthAttribute(attributes);
         }
 
-        String jwtAccessToken = jwtService.generateToken(member);
-        String jwtRefreshToken = jwtService.generateRefreshToken(member);
-
-        LoginResponseBody loginResponseBody = new LoginResponseBody();
-        loginResponseBody.setAccessToken(jwtAccessToken);
-        loginResponseBody.setRefreshToken(jwtRefreshToken);
-        loginResponseBody.setAccessTokenExpiresIn(3600000);
-        loginResponseBody.setRefreshTokenExpiresIn(604800000);
-        loginResponseBody.setMemberInfo(new MemberInfo(member));
+        LoginResponseBody loginResponseBody = authService.generateLoginResponse(member);
 
         return ResponseEntity.ok(loginResponseBody);
     }
