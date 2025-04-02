@@ -77,6 +77,7 @@ public class AuthController {
         Map<String, Object> attributes = oauthUser.getAttributes();
 
         String email = (String) attributes.get("email");
+        logger.debug("OAUTH EMAIL : " + email);
 
         Member member = memberService.findMemberByEmail(email);
         if (member == null) {

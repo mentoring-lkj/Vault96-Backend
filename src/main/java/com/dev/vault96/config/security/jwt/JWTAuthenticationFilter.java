@@ -44,6 +44,7 @@ public class JWTAuthenticationFilter extends OncePerRequestFilter {
         HandlerMethod handlerMethod = null;
         Object handler = request.getAttribute(HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE);
         if (handler instanceof HandlerMethod hm) {
+            logger.debug("hm found");
             handlerMethod = hm;
             boolean isSkip = handlerMethod.getMethodAnnotation(SkipJwtAuth.class) != null ||
                     handlerMethod.getBeanType().getAnnotation(SkipJwtAuth.class) != null;
@@ -53,15 +54,6 @@ public class JWTAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
         }
-
-
-        if (request.getServletPath().equals("/auth/login") || request.getServletPath().equals("/auth/join")) {
-            logger.debug("Skipping JWT filter for login request");
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-
 
         final String authHeader = request.getHeader("Authorization");
         if(authHeader == null || !authHeader.startsWith("Bearer ")){
