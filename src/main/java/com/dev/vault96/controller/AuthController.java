@@ -1,5 +1,6 @@
 package com.dev.vault96.controller;
 
+import com.dev.vault96.annotation.SkipJwtAuth;
 import com.dev.vault96.config.security.jwt.JWTService;
 import com.dev.vault96.controller.message.login.LoginRequestBody;
 import com.dev.vault96.controller.message.login.LoginResponseBody;
@@ -34,6 +35,7 @@ public class AuthController {
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     @PostMapping("/login")
+    @SkipJwtAuth
     public ResponseEntity<LoginResponseBody> postLogin(@RequestBody LoginRequestBody loginRequestBody) {
         logger.info("Login attempt: " + loginRequestBody.getEmail());
 
@@ -66,6 +68,7 @@ public class AuthController {
     }
 
     @GetMapping("/login/oauth")
+    @SkipJwtAuth
     public ResponseEntity<LoginResponseBody> googleOAuthLogin(HttpServletRequest request) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication instanceof OAuth2AuthenticationToken)) {

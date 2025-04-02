@@ -8,8 +8,8 @@ import java.util.Optional;
 
 @Getter
 public class DocumentSearchRequestBody {
-    Optional<String> name;
-    Optional<List<String>> tagIds;
+    String name;
+    List<String> tagIds;
     int page;
     int size;
 }

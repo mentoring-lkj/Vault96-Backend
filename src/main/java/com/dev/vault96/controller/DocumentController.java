@@ -69,8 +69,8 @@ public class DocumentController {
         String email = authService.extractEmailFromToken(request);
         if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
-        String name = requestBody.getName().orElse("").trim();
-        List<String> tagIds = requestBody.getTagIds().orElse(Collections.emptyList());
+        String name = requestBody.getName() != null ? requestBody.getName().trim() : "";
+        List<String> tagIds = requestBody.getTagIds() != null ? requestBody.getTagIds() : Collections.emptyList();
         String nameNFD = Normalizer.normalize(name, Normalizer.Form.NFD);
 
 
@@ -115,16 +115,14 @@ public class DocumentController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
-        requestBody.getName().ifPresent(name -> {
-            if (!name.trim().isEmpty()) {
-                document.setName(name);
-            }
-        });
+        if (requestBody.getName() != null && !requestBody.getName().trim().isEmpty()) {
+            document.setName(requestBody.getName());
+        }
 
-        List<String> tagIds = requestBody.getTagIds().orElse(Collections.emptyList());
-
-        List<Tag> tags = tagService.findTagsByOwnerAndTagIds(email, tagIds); // Tag ID로 실제 엔티티 조회
-        document.setTags(tags);
+        if (requestBody.getTagIds() != null) {
+            List<Tag> tags = tagService.findTagsByOwnerAndTagIds(email, requestBody.getTagIds());
+            document.setTags(tags);
+        }
 
         try {
             documentService.save(document);
