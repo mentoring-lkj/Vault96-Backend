@@ -1,5 +1,6 @@
 package com.dev.vault96.controller;
 
+import com.dev.vault96.annotation.SkipJwtAuth;
 import com.dev.vault96.config.security.jwt.JWTService;
 import com.dev.vault96.controller.message.login.LoginRequestBody;
 import com.dev.vault96.controller.message.login.LoginResponseBody;
@@ -28,27 +29,18 @@ import java.util.Map;
 @RequiredArgsConstructor
 @RequestMapping("/auth")
 public class AuthController {
-    private final JWTService jwtService;
     private final MemberService memberService;
     private final AuthService authService;
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     @PostMapping("/login")
+    @SkipJwtAuth
     public ResponseEntity<LoginResponseBody> postLogin(@RequestBody LoginRequestBody loginRequestBody) {
         logger.info("Login attempt: " + loginRequestBody.getEmail());
 
         try {
             Member member = authService.authenticate(loginRequestBody.getEmail(), loginRequestBody.getPassword());
-
-            String jwtAccessToken = jwtService.generateToken(member);
-            String jwtRefreshToken = jwtService.generateRefreshToken(member);
-
-            LoginResponseBody loginResponseBody = new LoginResponseBody();
-            loginResponseBody.setAccessToken(jwtAccessToken);
-            loginResponseBody.setRefreshToken(jwtRefreshToken);
-            loginResponseBody.setAccessTokenExpiresIn(3600000);
-            loginResponseBody.setRefreshTokenExpiresIn(604800000);
-            loginResponseBody.setMemberInfo(new MemberInfo(member));
+            LoginResponseBody loginResponseBody = authService.generateLoginResponse(member);
 
             return ResponseEntity.ok(loginResponseBody);
         } catch (Exception e) {
@@ -66,6 +58,7 @@ public class AuthController {
     }
 
     @GetMapping("/login/oauth")
+    @SkipJwtAuth
     public ResponseEntity<LoginResponseBody> googleOAuthLogin(HttpServletRequest request) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication instanceof OAuth2AuthenticationToken)) {
@@ -84,29 +77,14 @@ public class AuthController {
         Map<String, Object> attributes = oauthUser.getAttributes();
 
         String email = (String) attributes.get("email");
+        logger.debug("OAUTH EMAIL : " + email);
 
         Member member = memberService.findMemberByEmail(email);
         if (member == null) {
-            member = new Member();
-            member.setEmail(email);
-            member.setPersonName(new PersonName((String) attributes.get("given_name"), "", (String) attributes.get("family_name")));
-            member.setProfileImageUrl((String) attributes.get("picture"));
-            member.setCreateAt(new Date());
-            member.setValid(true);
-            member.setNickname((String)attributes.get("name"));
-            member.setProfileDescription("");
-            memberService.save(member);
+            member = memberService.createMemberFromOAuthAttribute(attributes);
         }
 
-        String jwtAccessToken = jwtService.generateToken(member);
-        String jwtRefreshToken = jwtService.generateRefreshToken(member);
-
-        LoginResponseBody loginResponseBody = new LoginResponseBody();
-        loginResponseBody.setAccessToken(jwtAccessToken);
-        loginResponseBody.setRefreshToken(jwtRefreshToken);
-        loginResponseBody.setAccessTokenExpiresIn(3600000);
-        loginResponseBody.setRefreshTokenExpiresIn(604800000);
-        loginResponseBody.setMemberInfo(new MemberInfo(member));
+        LoginResponseBody loginResponseBody = authService.generateLoginResponse(member);
 
         return ResponseEntity.ok(loginResponseBody);
     }

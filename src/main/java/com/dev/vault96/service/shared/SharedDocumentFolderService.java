@@ -43,6 +43,7 @@ public class SharedDocumentFolderService {
     public SharedDocumentFolder findSharedDocumentFolderByIdAndOwner(String id, String email) {
         return sharedDocumentFolderRepository.findSharedDocumentFolderByIdAndOwner(id, email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "해당 사용자의 폴더를 찾을 수 없습니다: " + id));
+
     }
 
     @Transactional

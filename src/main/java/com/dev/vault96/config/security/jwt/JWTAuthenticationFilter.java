@@ -1,5 +1,6 @@
 package com.dev.vault96.config.security.jwt;
 
+import com.dev.vault96.annotation.SkipJwtAuth;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,7 +17,9 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerExceptionResolver;
+import org.springframework.web.servlet.HandlerMapping;
 
 import java.io.IOException;
 
@@ -38,13 +41,19 @@ public class JWTAuthenticationFilter extends OncePerRequestFilter {
 
         logger.debug("JWT FILTER INVOKED");
 
-        if (request.getServletPath().equals("/auth/login") || request.getServletPath().equals("/auth/join")) {
-            logger.debug("Skipping JWT filter for login request");
-            filterChain.doFilter(request, response);
-            return;
+        HandlerMethod handlerMethod = null;
+        Object handler = request.getAttribute(HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE);
+        if (handler instanceof HandlerMethod hm) {
+            logger.debug("hm found");
+            handlerMethod = hm;
+            boolean isSkip = handlerMethod.getMethodAnnotation(SkipJwtAuth.class) != null ||
+                    handlerMethod.getBeanType().getAnnotation(SkipJwtAuth.class) != null;
+            if (isSkip) {
+                logger.debug("JWT filter skipped by @SkipJWTAuth");
+                filterChain.doFilter(request, response);
+                return;
+            }
         }
-
-
 
         final String authHeader = request.getHeader("Authorization");
         if(authHeader == null || !authHeader.startsWith("Bearer ")){

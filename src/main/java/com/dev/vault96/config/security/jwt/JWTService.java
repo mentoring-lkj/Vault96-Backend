@@ -18,16 +18,15 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 @Service
-@Getter
 public class JWTService {
     @Value("${security.jwt.secret-key}")
     private String secretKey;
 
     @Value("${security.jwt.expiration-time}")
-    private long jwtExpiration;
+    public static long jwtExpiration = 3600000;
 
     @Value("${security.jwt.refresh-expiration-time}")
-    private long jwtRefreshExpiration;
+    public static long jwtRefreshExpiration = 604800000;
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);

@@ -2,14 +2,19 @@ package com.dev.vault96.service.member;
 
 import com.dev.vault96.controller.message.member.MemberJoinForm;
 import com.dev.vault96.entity.user.Member;
+import com.dev.vault96.entity.user.PersonName;
 import com.dev.vault96.repository.member.MemberRepository;
 import com.mongodb.DuplicateKeyException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Date;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -23,6 +28,28 @@ public class MemberService {
         Optional<Member> member = memberRepository.findMemberByEmail(email);
         if(member.isPresent()) return member.get();
         else return null;
+    }
+
+    public Member createMemberFromOAuthAttribute (Map<String, Object> attributes){
+        try{
+            Member member = new Member();
+            member.setEmail((String) attributes.get("email"));
+            member.setPersonName(new PersonName((String) attributes.get("given_name"), "", (String) attributes.get("family_name")));
+            member.setProfileImageUrl((String) attributes.get("picture"));
+            member.setCreateAt(new Date());
+            member.setValid(true);
+            member.setNickname((String) attributes.get("name"));
+            member.setProfileDescription("");
+            memberRepository.save(member);
+            return member;
+
+        }catch(DuplicateKeyException e){
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        }
+        catch(Exception e){
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
     }
 
     public Member insertMember(MemberJoinForm memberJoinForm){
